@@ -7,28 +7,46 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 
 public class ZipUnlock {
+    private final static List<String> rightPasswords = new CopyOnWriteArrayList<>();
+    private static final ExecutorService executorService = Executors.newFixedThreadPool(4);
     public static void main(String[] args) throws Exception {
         Path source = Paths.get("C:/Users/MyComputer/Desktop/Packs");
-        System.out.println("Начинаю распаковывать...");
-        try (Stream<Path> file = Files.list(source)) {
-            file
-                    .filter(c -> c.getFileName().toString().toLowerCase().endsWith(".zip"))
-                    .filter(Files::isRegularFile)
-                    .forEach(c -> {
-                        try {
-                            unzip(c);
-                        } catch (ZipException e) {
-                            e.printStackTrace();
-                            throw new RuntimeException();
-                        }
-                    });
-        }
 
+        System.out.println("Начинаю распаковывать...");
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(4)) {
+
+            try (Stream<Path> file = Files.list(source)) {
+                file
+                        .filter(c -> c.getFileName().toString().toLowerCase().endsWith(".zip"))
+                        .filter(Files::isRegularFile)
+                        .forEach(c -> {
+                            executor.submit(() -> {
+                                try {
+                                    unzip(c);
+                                } catch (ZipException e) {
+                                    System.out.println("Ошибка при распаковке архива: " + c.getFileName());
+                                    e.printStackTrace();
+                                }
+                            });
+                        });
+            }
+
+            executor.shutdown();
+            executor.awaitTermination(1, TimeUnit.HOURS);
+        }
+        System.out.printf("правильные пароли: %s\n", rightPasswords);
+        System.out.println("Все архивы обработаны");
     }
 
     public static void unzip(Path paths) throws ZipException {
@@ -53,8 +71,8 @@ public class ZipUnlock {
                     System.out.println(passwords.get(i));
                     zipFile.setCharset(Charset.forName("IBM866"));
                     zipFile.extractAll("C:/Users/MyComputer/Desktop/UnPacks");
-                    System.out.printf("пароль подобран: %s ", passwords.get(i));
-                    break;
+                    rightPasswords.add(passwords.get(i));
+                    return;
                 } catch (ZipException e) {
                     System.out.printf("не получилось обработать данный пароль %s ", passwords.get(i));
                 }
