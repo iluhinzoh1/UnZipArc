@@ -130,6 +130,7 @@ public class ZipUnlock {
                         }
                     }
                 }
+
                 rightPasswords.add(password);
                 System.out.println("7Z распакован: " + archive.getFileName() + ", пароль: " + password);
                 return;
