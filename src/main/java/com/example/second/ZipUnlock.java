@@ -1,14 +1,13 @@
 package com.example.second;
 
-import com.github.junrar.Junrar;
-import com.github.junrar.exception.RarException;
+import com.aspose.zip.RarArchive;
+import com.aspose.zip.RarArchiveLoadOptions;
 import net.lingala.zip4j.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
 import org.apache.commons.compress.archivers.sevenz.SevenZFile;
 import org.springframework.util.StopWatch;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
@@ -16,7 +15,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
-import java.util.Timer;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -140,20 +138,28 @@ public class ZipUnlock {
         }
         System.out.println("7Z не распакован: " + archive.getFileName());
     }
+
     private static void unZipRar(Path paths) {
         for (String password : PASSWORDS) {
             try {
                 Files.createDirectories(OUTPUT);
+
+                RarArchiveLoadOptions options = new RarArchiveLoadOptions();
                 if (password.isEmpty()) {
-                    Junrar.extract(paths.toString(), OUTPUT.toString());
+                    try (RarArchive archive = new RarArchive(paths.toString())) {
+                        archive.extractToDirectory(OUTPUT.toString());
+                    }
                 } else {
-                    Junrar.extract(paths.toString(), OUTPUT.toString(), password);
+                    options.setDecryptionPassword(password);
+                    try (RarArchive archive = new RarArchive(paths.toString(), options)) {
+                        archive.extractToDirectory(OUTPUT.toString());
+                    }
                 }
 
                 rightPasswords.add(password);
                 System.out.println("RAR распакован: " + paths.getFileName() + ", пароль: " + password);
                 return;
-            } catch (IOException | RarException e) {
+            } catch (Exception e) {
                 // System.out.println("RAR пароль не подошел: " + password + " (" + e.getClass().getSimpleName() + ": " + e.getMessage() + ")");
             }
         }
