@@ -1,6 +1,7 @@
 package com.example.second;
 
-import javax.sound.sampled.*;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.SimpleAttributeSet;
@@ -17,16 +18,17 @@ import java.util.List;
 
 public class FirstForm extends JFrame {
     private JPanel panel1;
+    private JPanel panel2;
     private JButton button1;
-    private JButton button3;
     private JButton button2;
+    private JButton button3;
+    private JButton button4;
     private JTextPane logTextArea;
     private Path sourcePath;
     private Path outputPath;
 
-
     public FirstForm() {
-        super("UnZip_2.0");
+        super("UnZip_FINAL");
         setSize(700, 400);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setContentPane(createContentPane());
@@ -35,9 +37,26 @@ public class FirstForm extends JFrame {
         button1.addActionListener(e -> chooseSourceFolder());
         button2.addActionListener(e -> chooseOutputFolder());
         button3.addActionListener(e -> startUnpacking());
+        button4.addActionListener(e -> JOptionPane.showMessageDialog(null,
+                message, "От Новикова, 11.12.2026 ДМБ", JOptionPane.INFORMATION_MESSAGE));
         installDropHandlers();
         setVisible(true);
     }
+
+    private final String message = "Я очень долго делал эту залупу" +
+            ", очень много вложено пота" +
+            ", слез и других жидкостей, " +
+            "\n" + "цените эту хрень, во время призыва много времени сэкономит :)"
+            +
+            "\n" +
+            "\n" + "P.S Если вылетает какая либо ошибка, то пробуйте всегда "
+            +
+            "\n" + "распаковать архив вручную, через Сборного Шибанутого."
+            +
+            "\n" +
+            "\n" + "Вы со всем справитесь и все у вас будет хорошо" +
+            "\n" + "P.S.S Не ешьте бершбаршмаки © Гросул";
+
 
     private void installDropHandlers() {
         button1.setTransferHandler(createSourceDropHandler());
@@ -46,25 +65,27 @@ public class FirstForm extends JFrame {
 
     private JPanel createContentPane() {
         JPanel contentPane = new JPanel(new BorderLayout(8, 8));
-
         panel1 = new JPanel(new GridLayout(1, 3, 8, 8));
+        panel2 = new JPanel(new GridLayout(0, 7, 8, 8));
         button1 = new JButton("Откуда");
         button2 = new JButton("Куда");
         button3 = new JButton("Распаковать");
-
+        button4 = new JButton("От Деда");
         panel1.add(button1);
         panel1.add(button2);
         panel1.add(button3);
+        panel2.add(button4);
         logTextArea = new JTextPane();
         logTextArea.setEditable(false);
         contentPane.add(panel1, BorderLayout.NORTH);
+        contentPane.add(panel2, BorderLayout.SOUTH);
         contentPane.add(new JScrollPane(logTextArea), BorderLayout.CENTER);
         return contentPane;
     }
 
     private void chooseSourceFolder() {
         JFileChooser jFileChooser = new JFileChooser();
-        jFileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        jFileChooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
         int result = jFileChooser.showOpenDialog(this);
         if (result == JFileChooser.APPROVE_OPTION) {
             Path selectedPath = jFileChooser.getSelectedFile().toPath();
@@ -73,9 +94,22 @@ public class FirstForm extends JFrame {
                 JOptionPane.showMessageDialog(this, "Выбери архив .zip/.rar/.7z или папку");
                 return;
             }
-            sourcePath = selectedPath;
-            updateButtonPath(button1, sourcePath);
+
+            setSourcePathAndAutoOutput(selectedPath);
         }
+    }
+
+    private void setSourcePathAndAutoOutput(Path selectedPath) {
+        sourcePath = selectedPath;
+        updateButtonPath(button1, sourcePath);
+
+        if (Files.isDirectory(selectedPath)) {
+            outputPath = selectedPath;
+        } else {
+            outputPath = selectedPath.getParent();
+        }
+
+        updateButtonPath(button2, outputPath);
     }
 
     private TransferHandler createSourceDropHandler() {
@@ -102,8 +136,7 @@ public class FirstForm extends JFrame {
                         return false;
                     }
 
-                    sourcePath = droppedPath;
-                    updateButtonPath(button1, sourcePath);
+                    setSourcePathAndAutoOutput(droppedPath);
                     return true;
                 } catch (UnsupportedFlavorException | IOException e) {
                     JOptionPane.showMessageDialog(

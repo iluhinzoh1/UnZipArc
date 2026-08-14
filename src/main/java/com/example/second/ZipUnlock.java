@@ -1,68 +1,46 @@
 package com.example.second;
 
-import com.aspose.zip.RarArchive;
-import com.aspose.zip.RarArchiveEntry;
-import com.aspose.zip.RarArchiveLoadOptions;
-import net.lingala.zip4j.ZipFile;
 import net.lingala.zip4j.exception.ZipException;
-import net.lingala.zip4j.model.FileHeader;
-import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
-import org.apache.commons.compress.archivers.sevenz.SevenZFile;
+import net.sf.sevenzipjbinding.*;
+import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream;
+import net.sf.sevenzipjbinding.impl.RandomAccessFileOutStream;
 import org.springframework.util.StopWatch;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.Charset;
+import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 public class ZipUnlock {
     public static final String ERROR_PREFIX = "[ERROR] ";
-    private final static AtomicBoolean hasErrors = new AtomicBoolean(false);
+    private static final AtomicBoolean hasErrors = new AtomicBoolean(false);
+    private static final AtomicInteger count = new AtomicInteger(0);
     private final static List<String> rightPasswords = new CopyOnWriteArrayList<>();
-    private final static List<String> PASSWORDS = List.of("", "Lfdbkmyz124", "Lfdyjcnm124", "Lfrnbkbn124", "Lfhubytw124", "Lfhbntkm124",
-            "Lfnxfyby124", "Ldjhbirj124", "Ldjhjdsq124", "Ldjhzyrf124", "Ldekbxbt124", "Ldthjxrf124",
-            "Ltdbiybr124", "Ldejrbcm124", "Ltlerwbz124", "Ltpthnbh124", "Ltunzhyz124", "Ltrfltyn124",
-            "Ltrflfyc124", "Ltrflybr124", "Ltrfkbnh124", "Ltrjkmnt124", "Ltvjuhfa124", "Ltvtywbz124",
-            "Ltvjrhfn124", "Lthpfybt124", "Lthpjcnm124", "Ltcznybr124", "Ltntrnjh124", "Ltnfynth124",
-            "Ltwbvtnh124", "Lbfuyjcn124", "Lbfcgjhf124", "Fduecn32025", "Fllbrn32025", "Fljybc32025",
-            "Fpfcey32025", "Fpehbn32025", "Fqlfyf32025", "Fqrblj32025", "Fqvfhf32025", "Fqcfhb32025",
-            "Fqnfkf32025", "Frfyif32025", "Frptht32025", "Frvjkf32025", "Frcfbn32025", "Frcbjv32025",
-            "Fkfpjy32025", "Fkdthf32025", "Fktqrf32025", "Fkktkm32025", "Fvfynf32025", "Fvbfyn32025",
-            "Fvvbfr32025", "Fvajhf32025", "Fyfkbp32025", "Fyfybv32025", "Fyujhf32025", "Fyyfns32025",
-            "Fynbaf32025", "Fgjabp32025", "Fhlfbn32025", "Fnkfyn32025", "Fhabcn32025", "Fafnbr32025",
-            "Fhntkm32025", "Fhvfnf32025", "Fqceke32025", "Fqdjhb32025", "Fqlfyf32025");
-
-    public static void unzipAll(Path sourcePath, Path outputPath) {
-        unzipAll(sourcePath, outputPath, System.out::println);
-    }
+    private final static List<String> PASSWORDS = List.of("", "Fvvbfr32025", "Fduecn32025", "Fllbrn32025", "Fljybc32025", "Fpfcey32025", "Fpehbn32025", "Fqlfyf32025", "Fqrblj32025", "Fqvfhf32025", "Fqcfhb32025", "Fqnfkf32025", "Frfyif32025", "Frptht32025", "Frvjkf32025", "Frcfbn32025", "Frcbjv32025", "Fkfpjy32025", "Fkdthf32025", "Fktqrf32025", "Fkktkm32025", "Fvfynf32025", "Fvbfyn32025", "Fvajhf32025", "Fyfkbp32025", "Fyfybv32025", "Fyujhf32025", "Fyyfns32025", "Fynbaf32025", "Fgjabp32025", "Fhlfbn32025", "Fnkfyn32025", "Fhabcn32025", "Fafnbr32025", "Fhntkm32025", "Fhvfnf32025", "Fqceke32025", "Fqdjhb32025", "Fqlfyf32025");
 
     public static void unzipAll(Path sourcePath, Path outputPath, Consumer<String> log) {
+        hasErrors.set(false);
         Consumer<String> trackedLog = message -> {
             if (message.startsWith(ERROR_PREFIX)) {
                 hasErrors.set(true);
             }
             log.accept(message);
         };
-
         rightPasswords.clear();
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
-
         trackedLog.accept("Начинаю распаковывать...");
-
         try {
             Files.createDirectories(outputPath);
-
             if (Files.isRegularFile(sourcePath)) {
                 if (isSupportedArchive(sourcePath)) {
                     try {
@@ -76,20 +54,17 @@ public class ZipUnlock {
                 }
             } else {
                 try (ExecutorService executor = Executors.newFixedThreadPool(4)) {
-                    try (Stream<Path> file = Files.list(sourcePath)) {
-                        file
-                                .filter(Files::isRegularFile)
-                                .filter(ZipUnlock::isSupportedArchive)
-                                .forEach(c -> executor.submit(() -> {
-                                    try {
-                                        unzip(c, outputPath, trackedLog);
-                                    } catch (Exception e) {
-                                        trackedLog.accept(ERROR_PREFIX + "Ошибка при распаковке архива: " + c.getFileName());
-                                        trackedLog.accept(ERROR_PREFIX + e.getClass().getSimpleName() + ": " + e.getMessage());
-                                    }
-                                }));
+                    try (Stream<Path> file = Files.walk(sourcePath)) {
+                        file.filter(Files::isRegularFile).filter(ZipUnlock::isSupportedArchive).forEach(c -> executor.submit(() -> {
+                            try {
+                                count.incrementAndGet();
+                                unzip(c, outputPath, trackedLog);
+                            } catch (Exception e) {
+                                trackedLog.accept(ERROR_PREFIX + "Ошибка при распаковке архива: " + c.getFileName());
+                                trackedLog.accept(ERROR_PREFIX + e.getClass().getSimpleName() + ": " + e.getMessage());
+                            }
+                        }));
                     }
-
                     executor.shutdown();
                     boolean finished = executor.awaitTermination(1, TimeUnit.HOURS);
                     if (!finished) {
@@ -106,157 +81,153 @@ public class ZipUnlock {
             trackedLog.accept(ERROR_PREFIX + "Ошибка файловой системы: " + e.getMessage());
             throw new RuntimeException(e);
         }
-
         if (hasErrors.get()) {
             FirstForm.playWindowsSound("Windows Critical Stop.wav");
             trackedLog.accept(ERROR_PREFIX + "Все папки распакованы, но есть ошибки");
         } else {
             FirstForm.playWindowsSound("Windows Unlock.wav");
-            trackedLog.accept("Все папки распакованы");
+            trackedLog.accept("\n" + "Все папки распакованы");
         }
-
         stopWatch.stop();
-        trackedLog.accept("Время: " + stopWatch.getTotalTimeSeconds() + " сек.");
+        trackedLog.accept("Время: " + stopWatch.getTotalTimeSeconds() + " сек." + "\n" +
+                "Распаковано архивов: " + count);
     }
 
     public static boolean isSupportedArchive(Path path) {
         String name = path.getFileName().toString().toLowerCase();
-        return name.endsWith(".zip")
-                || name.endsWith(".rar")
-                || name.endsWith(".7z");
+        return name.endsWith(".zip") || name.endsWith(".rar")
+                || name.endsWith(".7z") || name.endsWith(" .zip")
+                || name.endsWith(" .rar") || name.endsWith(" .7z");
     }
 
-    private static void unzip(Path paths, Path outputPath, Consumer<String> trackedLog
-    ) throws ZipException {
-        String name = paths.getFileName().toString().toLowerCase();
-        if (name.endsWith(".zip")) {
-            unzipZip(paths, outputPath, trackedLog
-            );
-        } else if (name.endsWith(".rar")) {
-            unZipRar(paths, outputPath, trackedLog
-            );
-        } else if (name.endsWith(".7z")) {
-            unzip7z(paths, outputPath, trackedLog
-            );
+    private static void unzip(Path paths, Path outputPath, Consumer<String> trackedLog) throws ZipException {
+        extractWithSevenZip(paths, outputPath, trackedLog);
+    }
+
+    private static void extractWithSevenZip(Path archivePath, Path outputPath, Consumer<String> trackedLog) {
+        String archiveName = archivePath.getFileName().toString();
+        try {
+            if (!SevenZip.isInitializedSuccessfully()) SevenZip.initSevenZipFromPlatformJAR();
+        } catch (Exception ignored) {
         }
-    }
 
-    public static void unzipZip(Path paths, Path outputPath, Consumer<String> trackedLog) {
         for (String password : PASSWORDS) {
-            try {
-                ZipFile zipFile;
+            try (RandomAccessFile raf = new RandomAccessFile(archivePath.toFile(), "r");
+                 RandomAccessFileInStream rafStream = new RandomAccessFileInStream(raf);
+                 // null означает: "Движок, сам пойми что это за формат (zip/rar/7z) и распарси его"
+                 IInArchive inArchive = SevenZip.openInArchive(null, rafStream, password)) {
 
-                if (password.isEmpty()) {
-                    zipFile = new ZipFile(paths.toFile());
-                } else {
-                    zipFile = new ZipFile(paths.toFile(), password.toCharArray());
+                Path archiveOutputDir = createArchiveOutputDir(archivePath, outputPath);
+                RarExtractCallback callback = new RarExtractCallback(inArchive, archiveOutputDir.toString(), password);
+
+                inArchive.extract(null, false, callback);
+
+                if (!callback.hasError) {
+                    trackedLog.accept(archiveName + ", пароль: " + (password.isEmpty() ? "(без пароля)" : password));
+                    return;
                 }
-
-                zipFile.setCharset(Charset.forName("IBM866"));
-
-                if (zipFile.isEncrypted() && password.isEmpty()) {
-                    continue;
-                }
-
-                for (FileHeader fileHeader : zipFile.getFileHeaders()) {
-                    Path fileOutputPath = outputPath.resolve(fileHeader.getFileName());
-
-                    if (fileHeader.isDirectory()) {
-                        Files.createDirectories(fileOutputPath);
-                    } else {
-                        Files.createDirectories(fileOutputPath.getParent());
-                        try (InputStream inputStream = zipFile.getInputStream(fileHeader)) {
-                            Files.copy(inputStream, fileOutputPath, StandardCopyOption.REPLACE_EXISTING);
-                        }
-                    }
-                }
-
-                rightPasswords.add(password);
-                trackedLog.accept("ZIP распакован: " + paths.getFileName() + ", пароль: " + password);
-                return;
-
-            } catch (Exception e) {
-                // пароль не подошел, пробуем следующий
+            } catch (Exception ignored) {
             }
         }
-
-        trackedLog.accept("[ERROR] ZIP не распакован, пароль не найден: " + paths.getFileName());
+        trackedLog.accept(ERROR_PREFIX + "Архив не распакован, пароль не найден или поврежден: " + archiveName);
         hasErrors.set(true);
     }
 
-    private static void unzip7z(Path archive, Path outputPath, Consumer<String> trackedLog
-    ) {
-        for (String password : PASSWORDS) {
-            try {
-                SevenZFile.Builder builder = SevenZFile.builder()
-                        .setPath(archive);
-                if (!password.isEmpty()) {
-                    builder.setPassword(password);
-                }
-                try (SevenZFile sevenZFile = builder.get()) {
-                    SevenZArchiveEntry entry;
-                    while ((entry = sevenZFile.getNextEntry()) != null) {
-                        Path fileOutputPath = outputPath.resolve(entry.getName());
-                        if (entry.isDirectory()) {
-                            Files.createDirectories(fileOutputPath);
-                        } else {
-                            Files.createDirectories(fileOutputPath.getParent());
-                            try (InputStream inputStream = sevenZFile.getInputStream(entry)) {
-                                Files.copy(inputStream, fileOutputPath, StandardCopyOption.REPLACE_EXISTING);
-                            }
-                        }
-                    }
-                }
+    private static Path createArchiveOutputDir(Path archivePath, Path outputPath) throws IOException {
+        String archiveName = archivePath.getFileName().toString();
+        String folderName = removeArchiveExtension(archiveName).trim();
+        Path archiveOutputDir = outputPath.resolve(folderName);
+        Files.createDirectories(archiveOutputDir);
 
-                rightPasswords.add(password);
-                trackedLog
-                        .accept("7Z распакован: " + archive.getFileName() + ", пароль: " + password);
-                return;
-            } catch (Exception e) {
-                // пароль не подошел, пробуем следующий
-            }
-        }
-        trackedLog
-                .accept("[ERROR] 7Z не распакован, пароль не найден: " + archive.getFileName());
-        hasErrors.set(true);
+        return archiveOutputDir;
     }
 
-    private static void unZipRar(Path paths, Path outputPath, Consumer<String> trackedLog) {
-        for (String password : PASSWORDS) {
+    private static String removeArchiveExtension(String fileName) {
+        String lower = fileName.toLowerCase();
+        if (lower.endsWith(".zip")) {
+            return fileName.substring(0, fileName.length() - 4);
+        }
+        if (lower.endsWith(".rar")) {
+            return fileName.substring(0, fileName.length() - 4);
+        }
+        if (lower.endsWith(".7z")) {
+            return fileName.substring(0, fileName.length() - 3);
+        }
+        return fileName;
+    }
+
+    private static class RarExtractCallback implements IArchiveExtractCallback, ICryptoGetTextPassword {
+        private final IInArchive inArchive;
+        private final String destinationDirectory;
+        private final String password;
+        public boolean hasError = false; // Сюда мы ловим ошибку неверного пароля
+        private RandomAccessFile currentOutStream;
+
+        public RarExtractCallback(IInArchive inArchive, String destDir, String pass) {
+            this.inArchive = inArchive;
+            this.destinationDirectory = destDir;
+            this.password = pass;
+        }
+
+        @Override
+        public ISequentialOutStream getStream(int index, ExtractAskMode mode) throws SevenZipException {
+            if (mode != ExtractAskMode.EXTRACT) return null;
+            Boolean isFolder = (Boolean) inArchive.getProperty(index, PropID.IS_FOLDER);
+            String path = (String) inArchive.getProperty(index, PropID.PATH);
+            // Подстраховка на случай, если 7-Zip наткнется на скрытый системный файл без имени
+            if (path == null) {
+                path = "Файл_без_имени_" + index;
+            }
+            // МАГИЧЕСКАЯ ОЧИСТКА ПУТИ:
+            // 1. Убираем виндовые запрещенные символы
+            path = path.replaceAll("[:*?\"<>|]", "_");
+            // 2. Убираем ЛЮБОЕ количество пробелов ПЕРЕД любыми слешами (спасает от "папка  /файл")
+            path = path.replaceAll(" +(?=[/\\\\])", "");
+            // 3. Убираем пробел в самом конце имени файла, если он там есть
+            path = path.trim();
+
+            java.io.File outFile = java.nio.file.Paths.get(destinationDirectory, path).toFile();
+
+            if (isFolder != null && isFolder) return null;
+            outFile.getParentFile().mkdirs();
+
             try {
-                RarArchiveLoadOptions options = new RarArchiveLoadOptions();
-                if (!password.isEmpty()) {
-                    options.setDecryptionPassword(password);
-                }
-
-                try (RarArchive archive = password.isEmpty()
-                        ? new RarArchive(paths.toString())
-                        : new RarArchive(paths.toString(), options)) {
-
-                    for (RarArchiveEntry entry : archive.getEntries()) {
-                        Path fileOutputPath = outputPath.resolve(entry.getName());
-
-                        if (entry.isDirectory()) {
-                            Files.createDirectories(fileOutputPath);
-                        } else {
-                            Files.createDirectories(fileOutputPath.getParent());
-                            try (InputStream inputStream = password.isEmpty() ? entry.open() : entry.open(password)) {
-                                Files.copy(inputStream, fileOutputPath, StandardCopyOption.REPLACE_EXISTING);
-                            }
-                        }
-                    }
-                }
-
-                rightPasswords.add(password);
-                trackedLog.accept("RAR распакован: " + paths.getFileName() + ", пароль: " + password);
-                return;
-
+                currentOutStream = new RandomAccessFile(outFile, "rw");
+                return new RandomAccessFileOutStream(currentOutStream);
             } catch (Exception e) {
-                // пароль не подошел, пробуем следующий
+                // Если файл всё равно не создался, пробрасываем ошибку, чтобы движок понял, что файл битый
+                throw new SevenZipException(e);
             }
         }
 
-        trackedLog.accept("[ERROR] RAR не распакован, пароль не найден: " + paths.getFileName());
-        hasErrors.set(true);
+        @Override
+        public void setOperationResult(ExtractOperationResult result) {
+            // Магия здесь: если пароль не подошел, результат будет DATA_ERROR, и мы ставим флаг ошибки
+            if (result != ExtractOperationResult.OK) hasError = true;
+            if (currentOutStream != null) {
+                try {
+                    currentOutStream.close();
+                } catch (IOException e) {
+                }
+                currentOutStream = null;
+            }
+        }
+
+        @Override
+        public String cryptoGetTextPassword() {
+            return password;
+        }
+
+        @Override
+        public void prepareOperation(ExtractAskMode mode) {
+        }
+
+        @Override
+        public void setTotal(long total) {
+        }
+
+        @Override
+        public void setCompleted(long complete) {
+        }
     }
 }
