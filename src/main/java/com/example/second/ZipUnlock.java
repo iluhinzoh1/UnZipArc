@@ -100,6 +100,7 @@ public class ZipUnlock {
                 || name.endsWith(" .rar") || name.endsWith(" .7z");
     }
 
+
     private static void unzip(Path paths, Path outputPath, Consumer<String> trackedLog) throws ZipException {
         extractWithSevenZip(paths, outputPath, trackedLog);
     }
